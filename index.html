@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 食品安全智能检查系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.5/dist/purify.min.js"></script>
+    <style>
+        .drag-active { border-color: #dc2626 !important; background: #fef2f2 !important; }
+        .loading-spinner {
+            border: 3px solid #e5e7eb;
+            border-top: 3px solid #dc2626;
+            border-radius: 50%;
+            width: 40px; height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .fade-in { animation: fadeIn 0.4s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .markdown-body h1 { font-size: 1.5rem; font-weight: 700; margin: 1.25rem 0 0.75rem; color: #111827; border-bottom: 2px solid #dc2626; padding-bottom: 0.5rem; }
+        .markdown-body h2 { font-size: 1.25rem; font-weight: 600; margin: 1rem 0 0.5rem; color: #1f2937; }
+        .markdown-body h3 { font-size: 1.125rem; font-weight: 600; margin: 0.875rem 0 0.5rem; color: #374151; }
+        .markdown-body table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.875rem; }
+        .markdown-body th, .markdown-body td { border: 1px solid #d1d5db; padding: 0.5rem 0.75rem; text-align: left; vertical-align: top; }
+        .markdown-body th { background: #f3f4f6; font-weight: 600; }
+        .markdown-body tr:nth-child(even) { background: #f9fafb; }
+        .markdown-body ul, .markdown-body ol { margin: 0.75rem 0; padding-left: 1.5rem; }
+        .markdown-body li { margin: 0.25rem 0; }
+        .markdown-body p { margin: 0.75rem 0; line-height: 1.8; }
+        .markdown-body blockquote { border-left: 4px solid #dc2626; padding: 0.75rem 1rem; color: #4b5563; margin: 1rem 0; background: #fef2f2; border-radius: 0 0.5rem 0.5rem 0; }
+        .markdown-body code { background: #f3f4f6; padding: 0.125rem 0.375rem; border-radius: 0.25rem; font-size: 0.875em; color: #dc2626; }
+        .markdown-body pre { background: #1f2937; color: #f3f4f6; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; margin: 1rem 0; }
+        .markdown-body pre code { background: transparent; color: inherit; padding: 0; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 min-h-screen">
+
+<div class="max-w-6xl mx-auto p-4 md:p-6">
+    <!-- Header -->
+    <div class="bg-gradient-to-r from-red-700 to-red-600 rounded-xl shadow-lg p-6 mb-6 text-white">
+        <div class="flex items-center justify-between flex-wrap gap-4">
+            <div>
+                <h1 class="text-2xl md:text-3xl font-bold tracking-tight">🛡️ AI 食品安全智能检查系统</h1>
+                <p class="mt-2 text-red-100 text-sm md:text-base">基于 Kimi K2.6 大模型 · 图像识别 · 法规自动关联 · 一键生成检查报告</p>
+            </div>
+            <div class="text-right">
+                <div class="text-xs text-red-200 bg-red-800/40 px-3 py-1 rounded-full inline-block">Powered by Moonshot AI</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CORS Hint -->
+    <div class="bg-amber-50 border-l-4 border-amber-400 p-4 rounded-r-lg mb-6 text-sm text-amber-800">
+        <strong>💡 使用提示：</strong>建议通过本地服务器打开本页面以避免浏览器跨域限制。
+        <span class="font-mono text-xs bg-amber-100 px-2 py-0.5 rounded ml-1">python -m http.server 8080</span>
+        然后访问 <span class="font-mono text-xs bg-amber-100 px-2 py-0.5 rounded">http://localhost:8080</span>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Left Panel: Config & Upload -->
+        <div class="lg:col-span-1 space-y-6">
+            <!-- API Config -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div class="bg-gray-50 px-4 py-3 border-b border-gray-200 flex justify-between items-center cursor-pointer" onclick="toggleSection('apiConfigBody')">
+                    <h3 class="font-semibold text-gray-700">⚙️ API 配置</h3>
+                    <span id="apiConfigBody-icon" class="text-gray-400 text-xs">▼</span>
+                </div>
+                <div id="apiConfigBody" class="p-4 space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">API Key</label>
+                        <div class="relative">
+                            <input type="password" id="apiKey" value=""
+    placeholder="请输入您的 Moonshot API Key（sk-开头）"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm font-mono"
+                                placeholder="sk-...">
+                            <button onclick="toggleKeyVisibility()" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs">显示</button>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">默认已填入，也可更换为您自己的 Key</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">模型</label>
+                        <select id="model" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 text-sm">
+                            <option value="kimi-k2.6" selected>kimi-k2.6（推荐 · 视觉+推理）</option>
+                            <option value="kimi-k2.5">kimi-k2.5</option>
+                            <option value="moonshot-v1-8k-vision-preview">moonshot-v1-8k-vision（轻量）</option>
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">输入单价 (¥/百万token)</label>
+                            <input type="number" id="inputPrice" value="6" step="0.1" class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">输出单价 (¥/百万token)</label>
+                            <input type="number" id="outputPrice" value="25" step="0.1" class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scene Description -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">📝 图片拍摄区域说明 <span class="text-red-500">*</span></label>
+                <textarea id="sceneDesc" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm resize-none"
+                    placeholder="例如：某学校食堂面点专间（含和面机、压面机、成型区、原料暂存区）"></textarea>
+                <p class="text-xs text-gray-500 mt-1">描述越具体，AI 分析越精准</p>
+            </div>
+
+            <!-- Image Upload -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                <div class="flex justify-between items-center mb-2">
+                    <label class="block text-sm font-medium text-gray-700">📷 上传现场图片 <span class="text-red-500">*</span></label>
+                    <span class="text-xs text-gray-500" id="imgCount">0 / 5</span>
+                </div>
+                <div id="dropZone"
+                    class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer transition-colors hover:border-red-400 hover:bg-red-50"
+                    onclick="document.getElementById('fileInput').click()"
+                    ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
+                    <div class="text-gray-400 mb-2">
+                        <svg class="w-10 h-10 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"></path></svg>
+                    </div>
+                    <p class="text-sm text-gray-600">点击或拖拽上传图片</p>
+                    <p class="text-xs text-gray-400 mt-1">支持 JPG、PNG，最多 5 张，单张建议 &lt; 5MB</p>
+                </div>
+                <input type="file" id="fileInput" class="hidden" accept="image/*" multiple onchange="handleFileSelect(event)">
+                <div id="imagePreview" class="grid grid-cols-3 gap-2 mt-3"></div>
+            </div>
+
+            <!-- Prompt Template -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div class="bg-gray-50 px-4 py-3 border-b border-gray-200 flex justify-between items-center cursor-pointer" onclick="toggleSection('promptBody')">
+                    <h3 class="font-semibold text-gray-700">🤖 检查 Prompt 模板</h3>
+                    <span id="promptBody-icon" class="text-gray-400 text-xs">▼</span>
+                </div>
+                <div id="promptBody" class="p-4">
+                    <textarea id="promptTemplate" rows="12" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 text-sm font-mono text-xs leading-relaxed resize-y"></textarea>
+                    <p class="text-xs text-gray-500 mt-2">变量 <code>{图片说明}</code> 会自动替换为上方输入的内容</p>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex gap-3">
+                <button onclick="startCheck()" id="btnCheck"
+                    class="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-3 px-4 rounded-lg shadow-md transition-colors flex items-center justify-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
+                    开始 AI 检查
+                </button>
+                <button onclick="resetAll()"
+                    class="px-4 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold rounded-lg transition-colors">
+                    重置
+                </button>
+            </div>
+        </div>
+
+        <!-- Right Panel: Results -->
+        <div class="lg:col-span-2 space-y-6">
+            <!-- Loading -->
+            <div id="loadingArea" class="hidden bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+                <div class="loading-spinner mx-auto mb-4"></div>
+                <p class="text-gray-600 font-medium">AI 正在分析图片并关联法规条文...</p>
+                <p class="text-xs text-gray-400 mt-2">模型：Kimi K2.6 · 支持多图联合推理 · 请稍候</p>
+            </div>
+
+            <!-- Stats Cards -->
+            <div id="statsArea" class="hidden grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 text-center">
+                    <div class="text-xs text-gray-500 mb-1">⏱️ 耗时</div>
+                    <div class="text-xl font-bold text-gray-800" id="statTime">-</div>
+                    <div class="text-xs text-gray-400">秒</div>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 text-center">
+                    <div class="text-xs text-gray-500 mb-1">📝 输入 Token</div>
+                    <div class="text-xl font-bold text-blue-600" id="statInput">-</div>
+                    <div class="text-xs text-gray-400">含图片</div>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 text-center">
+                    <div class="text-xs text-gray-500 mb-1">💬 输出 Token</div>
+                    <div class="text-xl font-bold text-green-600" id="statOutput">-</div>
+                    <div class="text-xs text-gray-400">报告文本</div>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 text-center">
+                    <div class="text-xs text-gray-500 mb-1">💰 估算费用</div>
+                    <div class="text-xl font-bold text-red-600" id="statCost">-</div>
+                    <div class="text-xs text-gray-400">人民币</div>
+                </div>
+            </div>
+
+            <!-- Result Content -->
+            <div id="resultArea" class="hidden bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden fade-in">
+                <div class="bg-gray-50 px-5 py-3 border-b border-gray-200 flex justify-between items-center">
+                    <h3 class="font-semibold text-gray-700">📋 检查结果报告</h3>
+                    <div class="flex gap-2">
+                        <button onclick="copyResult()" class="text-xs bg-white border border-gray-300 hover:bg-gray-50 px-3 py-1.5 rounded transition-colors">复制全文</button>
+                        <button onclick="exportMd()" class="text-xs bg-white border border-gray-300 hover:bg-gray-50 px-3 py-1.5 rounded transition-colors">导出 Markdown</button>
+                    </div>
+                </div>
+                <div id="resultContent" class="markdown-body p-6 max-h-[800px] overflow-y-auto"></div>
+            </div>
+
+            <!-- Error Area -->
+            <div id="errorArea" class="hidden bg-red-50 border border-red-200 rounded-xl p-5 text-red-700 text-sm">
+                <div class="font-semibold mb-2 flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    请求失败
+                </div>
+                <div id="errorMsg"></div>
+            </div>
+
+            <!-- History -->
+            <div id="historyArea" class="hidden bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div class="bg-gray-50 px-5 py-3 border-b border-gray-200">
+                    <h3 class="font-semibold text-gray-700">📚 本次会话检查记录</h3>
+                </div>
+                <div id="historyList" class="divide-y divide-gray-100 max-h-64 overflow-y-auto"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="mt-8 text-center text-xs text-gray-400 pb-6">
+        AI 食品安全智能检查系统 · 本工具仅供学习测试使用 · 检查结果需经专业人员复核
+    </div>
+</div>
+
+<script>
+// ==================== 默认 Prompt 模板 ====================
+const DEFAULT_PROMPT = `你是一名具备国家市场监管总局资质的食品安全检查专家，精通《中华人民共和国食品安全法》及其实施条例、GB 31654-2021《食品安全国家标准 餐饮服务通用卫生规范》、《餐饮服务食品安全操作规范》、《学校食品安全与营养健康管理规定》、《福建省集中用餐单位食堂防控有害生物污染食品工作指引》、《闽市监餐〔2023〕231号 福建省供校集体用餐配送单位食品安全指南》等法规标准。
+
+这些图片是"{图片说明}"的现场检查照片。请你对图片进行专业、细致的食品安全合规分析。
+
+## 分析要求
+1. **逐图分析**：对每张图片分别描述可见内容，并指出存在的违规问题（如有）。
+2. **违规认定**：对确认的违规问题，必须列出：
+   - 违规内容（具体位置、现象描述、严重程度判断）
+   - 违反的法律法规/标准及具体条文（必须准确引用条文编号）
+   - 处罚依据（对应法律条款）及处罚内容
+   - 整改建议（分"立即整改""短期整改""长期保持"三类）
+3. **存疑标注**：对图片中看不清或无法确认的内容，标注"【存疑】建议现场核实"。
+4. **合规亮点**：如有做得好的方面，请一并指出，形成正面引导。
+
+## 输出格式
+### 一、总体判定
+对该区域食品安全状况给出总体评价（符合 / 基本符合 / 不符合），并给出风险等级（低 / 中 / 高）。
+
+### 二、违规问题逐项分析
+请按以下维度输出（可用表格或结构化列表）：
+- 序号
+- 违规问题（一句话概括）
+- 违规内容（详细描述）
+- 违反法规/标准
+- 具体条文
+- 处罚依据及处罚内容
+- 整改建议
+
+### 三、整改优先级汇总
+- **【立即整改 · 24小时内】**：涉及食品安全重大风险、原料污染、人员卫生等问题
+- **【短期整改 · 3日内】**：涉及环境卫生、设备清洁、物品存放等问题
+- **【长期保持 · 持续执行】**：涉及制度建设、台账记录、培训考核等问题
+
+### 四、检查结论与建议
+给出总结性意见，以及对监管人员/企业负责人的后续工作建议。
+
+## 重要提示
+- 分析必须严格基于图片中**可见的内容**，不做无依据推测。
+- 法规引用必须准确，优先引用《食品安全法》及 GB 31654-2021。
+- 如果图片中未见明显违规，请明确说明"经图片分析，未发现明显违规问题"，同时提醒"图片检查不能替代现场全面检查"。`;
+
+// ==================== 状态管理 ====================
+let uploadedImages = []; // {id, file, base64, compressedBase64}
+let currentResult = null;
+
+// ==================== 初始化 ====================
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('promptTemplate').value = DEFAULT_PROMPT;
+    renderHistory();
+});
+
+// ==================== 折叠面板 ====================
+function toggleSection(id) {
+    const el = document.getElementById(id);
+    const icon = document.getElementById(id + '-icon');
+    if (el.style.display === 'none') {
+        el.style.display = 'block';
+        icon.textContent = '▼';
+    } else {
+        el.style.display = 'none';
+        icon.textContent = '▶';
+    }
+}
+
+// ==================== API Key 显隐 ====================
+function toggleKeyVisibility() {
+    const input = document.getElementById('apiKey');
+    const btn = input.nextElementSibling;
+    if (input.type === 'password') {
+        input.type = 'text';
+        btn.textContent = '隐藏';
+    } else {
+        input.type = 'password';
+        btn.textContent = '显示';
+    }
+}
+
+// ==================== 图片拖拽上传 ====================
+function handleDragOver(e) {
+    e.preventDefault();
+    e.currentTarget.classList.add('drag-active');
+}
+function handleDragLeave(e) {
+    e.currentTarget.classList.remove('drag-active');
+}
+function handleDrop(e) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-active');
+    const files = e.dataTransfer.files;
+    if (files.length) processFiles(files);
+}
+function handleFileSelect(e) {
+    const files = e.target.files;
+    if (files.length) processFiles(files);
+    e.target.value = ''; // 允许重复选同一文件
+}
+
+// ==================== 图片处理（压缩+预览） ====================
+async function processFiles(files) {
+    const remaining = 5 - uploadedImages.length;
+    if (remaining <= 0) { alert('最多上传 5 张图片'); return; }
+
+    const toProcess = Array.from(files).filter(f => f.type.startsWith('image/')).slice(0, remaining);
+    if (toProcess.length === 0) { alert('请选择图片文件'); return; }
+
+    for (const file of toProcess) {
+        const id = Date.now() + Math.random().toString(36).slice(2);
+        const base64Full = await fileToBase64(file);
+        // 压缩图片用于 API 传输（最长边 1920，质量 0.85）
+        const compressed = await compressImage(base64Full, 1920, 0.85);
+        uploadedImages.push({ id, file, base64: base64Full, compressedBase64: compressed });
+    }
+    renderPreviews();
+    updateImgCount();
+}
+
+function fileToBase64(file) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result);
+        reader.readAsDataURL(file);
+    });
+}
+
+function compressImage(base64, maxWidth = 1920, quality = 0.85) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+            let w = img.width, h = img.height;
+            if (w > maxWidth) { h = Math.round(h * maxWidth / w); w = maxWidth; }
+            const canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.src = base64;
+    });
+}
+
+function renderPreviews() {
+    const container = document.getElementById('imagePreview');
+    container.innerHTML = uploadedImages.map((img, idx) => `
+        <div class="relative group rounded-lg overflow-hidden border border-gray-200 aspect-square">
+            <img src="${img.base64}" class="w-full h-full object-cover">
+            <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                <button onclick="removeImage('${img.id}')" class="bg-red-600 text-white text-xs px-2 py-1 rounded hover:bg-red-700">删除</button>
+            </div>
+            <div class="absolute top-1 left-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">${idx + 1}</div>
+        </div>
+    `).join('');
+}
+
+function removeImage(id) {
+    uploadedImages = uploadedImages.filter(i => i.id !== id);
+    renderPreviews();
+    updateImgCount();
+}
+
+function updateImgCount() {
+    document.getElementById('imgCount').textContent = `${uploadedImages.length} / 5`;
+}
+
+// ==================== 核心：开始检查 ====================
+async function startCheck() {
+    const apiKey = document.getElementById('apiKey').value.trim();
+    const model = document.getElementById('model').value;
+    const sceneDesc = document.getElementById('sceneDesc').value.trim();
+    const promptTemplate = document.getElementById('promptTemplate').value;
+
+    if (!apiKey) { alert('请输入 API Key'); return; }
+    if (!sceneDesc) { alert('请输入图片拍摄区域说明'); return; }
+    if (uploadedImages.length === 0) { alert('请至少上传一张图片'); return; }
+
+    // 构建 Prompt
+    const userPrompt = promptTemplate.replace(/\{图片说明\}/g, sceneDesc);
+
+    // 构建消息内容（多图 + 文字）
+    const content = [];
+    for (const img of uploadedImages) {
+        content.push({
+            type: 'image_url',
+            image_url: { url: img.compressedBase64 || img.base64 }
+        });
+    }
+    content.push({ type: 'text', text: userPrompt });
+
+    const messages = [
+        { role: 'system', content: '你是一名资深的食品安全监管和检查专家，具备国家市场监管总局食品安全检查员资质。' },
+        { role: 'user', content: content }
+    ];
+
+    // UI 状态
+    setLoading(true);
+    hideResult();
+    hideError();
+
+    const startTime = performance.now();
+    try {
+        const response = await fetch('https://api.moonshot.cn/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({
+                model: model,
+                messages: messages,
+                temperature: 1,
+                max_tokens: 8192
+            })
+        });
+
+        const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
+        const data = await response.json();
+
+        if (!response.ok) {
+            const errMsg = data.error?.message || JSON.stringify(data);
+            throw new Error(`API 错误 [${response.status}]: ${errMsg}`);
+        }
+
+        const assistantMsg = data.choices?.[0]?.message?.content || '未返回有效内容';
+        const usage = data.usage || {};
+
+        currentResult = {
+            scene: sceneDesc,
+            model: model,
+            content: assistantMsg,
+            elapsed: elapsed,
+            promptTokens: usage.prompt_tokens || 0,
+            completionTokens: usage.completion_tokens || 0,
+            totalTokens: usage.total_tokens || 0,
+            timestamp: new Date().toLocaleString()
+        };
+
+        renderResult(currentResult);
+        saveHistory(currentResult);
+        setLoading(false);
+
+    } catch (err) {
+        setLoading(false);
+        showError(err);
+    }
+}
+
+// ==================== 结果渲染 ====================
+function renderResult(record) {
+    // 计算费用
+    const inputPrice = parseFloat(document.getElementById('inputPrice').value) || 0;
+    const outputPrice = parseFloat(document.getElementById('outputPrice').value) || 0;
+    const cost = (record.promptTokens * inputPrice + record.completionTokens * outputPrice) / 1000000;
+
+    // 统计卡片
+    document.getElementById('statTime').textContent = record.elapsed;
+    document.getElementById('statInput').textContent = record.promptTokens.toLocaleString();
+    document.getElementById('statOutput').textContent = record.completionTokens.toLocaleString();
+    document.getElementById('statCost').textContent = '¥' + cost.toFixed(4);
+    document.getElementById('statsArea').classList.remove('hidden');
+
+    // Markdown 渲染
+    const rawHtml = marked.parse(record.content);
+    const cleanHtml = DOMPurify.sanitize(rawHtml);
+    document.getElementById('resultContent').innerHTML = cleanHtml;
+    document.getElementById('resultArea').classList.remove('hidden');
+
+    // 滚动到结果
+    document.getElementById('resultArea').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ==================== 错误处理 ====================
+function showError(err) {
+    const isCors = err.message.includes('Failed to fetch') || err.message.includes('NetworkError') || err.message.includes('CORS');
+    let html = '';
+    if (isCors) {
+        html = `<div class="mb-2 font-medium">检测到浏览器跨域(CORS)限制，无法直接访问 Moonshot API。</div>
+        <div class="space-y-2">
+            <div><strong>方案一（推荐）：</strong>通过本地服务器打开本页面</div>
+            <div class="bg-gray-100 p-2 rounded font-mono text-xs">python -m http.server 8080<br># 然后访问 http://localhost:8080</div>
+            <div><strong>方案二：</strong>安装 Chrome 扩展 "Allow CORS: Access-Control-Allow-Origin" 并开启。</div>
+            <div><strong>方案三：</strong>使用 Edge/Chrome 的 --disable-web-security 参数启动浏览器（仅限本地测试）。</div>
+        </div>`;
+    } else {
+        html = `<div>${escapeHtml(err.message)}</div>
+        <div class="mt-2 text-xs text-red-500">请检查 API Key 是否有效、账户余额是否充足、模型名称是否正确。</div>`;
+    }
+    document.getElementById('errorMsg').innerHTML = html;
+    document.getElementById('errorArea').classList.remove('hidden');
+}
+
+function hideError() { document.getElementById('errorArea').classList.add('hidden'); }
+function hideResult() {
+    document.getElementById('resultArea').classList.add('hidden');
+    document.getElementById('statsArea').classList.add('hidden');
+}
+function setLoading(show) {
+    document.getElementById('loadingArea').classList.toggle('hidden', !show);
+    const btn = document.getElementById('btnCheck');
+    btn.disabled = show;
+    btn.classList.toggle('opacity-60', show);
+    btn.classList.toggle('cursor-not-allowed', show);
+}
+
+// ==================== 历史记录 ====================
+function saveHistory(record) {
+    let history = JSON.parse(localStorage.getItem('foodSafetyChecks') || '[]');
+    history.unshift(record);
+    if (history.length > 10) history = history.slice(0, 10);
+    localStorage.setItem('foodSafetyChecks', JSON.stringify(history));
+    renderHistory();
+}
+
+function renderHistory() {
+    const history = JSON.parse(localStorage.getItem('foodSafetyChecks') || '[]');
+    const area = document.getElementById('historyArea');
+    const list = document.getElementById('historyList');
+    if (history.length === 0) { area.classList.add('hidden'); return; }
+
+    area.classList.remove('hidden');
+    list.innerHTML = history.map((h, i) => `
+        <div class="p-4 hover:bg-gray-50 cursor-pointer transition-colors" onclick="loadHistory(${i})">
+            <div class="flex justify-between items-start">
+                <div class="font-medium text-sm text-gray-800 truncate pr-4">${escapeHtml(h.scene)}</div>
+                <div class="text-xs text-gray-400 whitespace-nowrap">${h.elapsed}s · ${h.totalTokens}tokens</div>
+            </div>
+            <div class="text-xs text-gray-500 mt-1">${h.timestamp} · ${h.model}</div>
+        </div>
+    `).join('');
+}
+
+function loadHistory(index) {
+    const history = JSON.parse(localStorage.getItem('foodSafetyChecks') || '[]');
+    const h = history[index];
+    if (!h) return;
+    document.getElementById('sceneDesc').value = h.scene;
+    currentResult = h;
+    renderResult(h);
+}
+
+function clearHistory() {
+    localStorage.removeItem('foodSafetyChecks');
+    renderHistory();
+}
+
+// ==================== 工具函数 ====================
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function copyResult() {
+    if (!currentResult) return;
+    navigator.clipboard.writeText(currentResult.content).then(() => {
+        alert('报告内容已复制到剪贴板');
+    });
+}
+
+function exportMd() {
+    if (!currentResult) return;
+    const blob = new Blob([currentResult.content], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `食品安全检查报告_${new Date().toISOString().slice(0,10)}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+function resetAll() {
+    if (!confirm('确定清空所有图片和结果吗？')) return;
+    uploadedImages = [];
+    renderPreviews();
+    updateImgCount();
+    hideResult();
+    hideError();
+    document.getElementById('sceneDesc').value = '';
+    currentResult = null;
+}
+</script>
+</body>
+</html>
