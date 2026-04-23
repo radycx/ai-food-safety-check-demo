@@ -532,7 +532,7 @@ function setLoading(show) {
     btn.classList.toggle('cursor-not-allowed', show);
 }
 
-// ==================== 历史记录 ====================
+// ==================== 历史 记录 ====================
 function saveHistory(record) {
     let history = JSON.parse(localStorage.getItem('foodSafetyChecks') || '[]');
     history.unshift(record);
